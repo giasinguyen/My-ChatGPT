@@ -1,69 +1,113 @@
-import PropType from "prop-types";
-import IconPlus from "../assets/plusIcon.png";
-import IconChat from "../assets/chat.png";
-import IconTrash from "../assets/remove.png";
-import IconMenu from "../assets/menu.png";
-import { useDispatch, useSelector } from "react-redux";
+import { useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { PlusIcon, ArrowLeftIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { addChat, removeChat } from "../store/chatSlice";
-import { Link, useNavigate } from "react-router-dom";
+import Logo from "../assets/chat.png";
 
-const SideBar = ({ onToggle }) => {
+const SideBar = ({ isOpen, setIsOpen }) => {
+  const { data: chats } = useSelector((state) => state.chat);
   const dispatch = useDispatch();
-  const { data } = useSelector((state) => state.chat);
   const navigate = useNavigate();
+  const { id } = useParams();
+  const [hoveredChatId, setHoveredChatId] = useState(null);
 
-  const handleNewChat = () => {
+  const handleCreateChat = () => {
     dispatch(addChat());
+    const newChat = chats[chats.length - 1];
+    if (newChat) {
+      navigate(`/c/${newChat.id}`);
+    }
   };
 
-  const handleRemoveChat = (id) => {
-    dispatch(removeChat(id));
-    navigate('/')
+  const handleDeleteChat = (chatId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dispatch(removeChat(chatId));
+    if (id === chatId) navigate("/");
   };
 
   return (
-    <div className="bg-primaryBg-sideBar w-[280px] h-screen text-white p-8">
-      <button className="flex ml-auto xl:hidden" onClick={onToggle}>
-        <img src={IconMenu} alt="menu icon" className="w-10 h-10" />
+    <>
+      {/* Mobile menu button */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fixed z-20 top-4 ${isOpen ? 'left-[260px]' : 'left-4'} md:hidden bg-white dark:bg-gray-700 p-2 rounded-full shadow-lg transition-all duration-300`}
+      >
+        <ArrowLeftIcon className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : 'rotate-0'}`} />
       </button>
-      <div className="mt-20">
-        <button
-          className="px-4 py-2 flex items-center space-x-4 bg-gray-600 mb-10"
-          onClick={handleNewChat}
-        >
-          <img src={IconPlus} alt="plus icon" className="w-4 h-4" />
-          <p>Cuộc trò truyện mới</p>
-        </button>
-        <div className="space-y-4">
-          <p>Gần đây:</p>
-          <div className="flex flex-col space-y-6">
-            {data.map((chat) => (
+
+      {/* Sidebar */}
+      <aside 
+        className={`${isOpen ? 'translate-x-0' : '-translate-x-full'} 
+          fixed md:sticky top-0 left-0 z-10 h-full w-64 
+          bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700
+          transition-transform duration-300 ease-in-out
+          flex flex-col`}
+      >
+        {/* Sidebar header with logo */}
+        <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+          <Link to="/" className="flex items-center space-x-2">
+            <img src={Logo} alt="Logo" className="w-8 h-8" />
+            <span className="font-bold text-lg dark:text-white">My ChatGPT</span>
+          </Link>
+        </div>
+
+        {/* New chat button */}
+        <div className="p-4">
+          <button
+            onClick={handleCreateChat}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200"
+          >
+            <PlusIcon className="w-5 h-5" />
+            <span>Cuộc trò chuyện mới</span>
+          </button>
+        </div>
+
+        {/* Chat list */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
+          <div className="py-2 space-y-1">
+            {chats && chats.map((chat) => (
               <Link
-                to={`/chat/${chat.id}`}
-                className="flex items-center justify-between p-4 bg-gray-800"
-                key={chat?.id}
+                key={chat.id}
+                to={`/c/${chat.id}`}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                  id === chat.id 
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white' 
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                } transition-colors duration-200`}
+                onMouseEnter={() => setHoveredChatId(chat.id)}
+                onMouseLeave={() => setHoveredChatId(null)}
               >
-                <div className="flex items-center space-x-4">
-                  <img src={IconChat} alt="chat icon" className="w-8 h-8" />
-                  <p>{chat.title}</p>
+                <div className="flex items-center gap-2 truncate">
+                  <div className="truncate">
+                    {chat.title || "New Chat"}
+                  </div>
                 </div>
-                <button onClick={(e) => {
-                  e.preventDefault();
-                  handleRemoveChat(chat.id);  
-                }}>
-                  <img src={IconTrash} alt="chat icon" className="w-5 h-5" />
-                </button>
+                {hoveredChatId === chat.id && (
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                      className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </Link>
             ))}
           </div>
         </div>
-      </div>
-    </div>
+        
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
+            My ChatGPT v1.0.0
+          </div>
+        </div>
+      </aside>
+    </>
   );
-};
-
-SideBar.propTypes = {
-  onToggle: PropType.func,
 };
 
 export default SideBar;

@@ -1,128 +1,170 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import ImgTemp from "../assets/temp.jpeg";
-import IconMenu from "../assets/menu.png";
-import SideBar from "../components/SideBar";
-import IconStar from "../assets/star.png";
-import Gemini from "../gemini";
-import { useDispatch, useSelector } from "react-redux";
-import { addMessage, setNameChat } from "../store/chatSlice";
+import { useEffect, useState, useRef } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
+import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import { addMessage } from "../store/chatSlice";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+import UserAvatar from "../assets/chat.png";
+import BotAvatar from "../assets/chat.png";
+import '../index.css';
 
 const ChatDetail = () => {
-  const [menuToggle, setMenuToggle] = useState(true);
-  const [dataDetail, setDataDetail] = useState([]);
-  const [messageDetail, setMessageDetail] = useState([]);
-  const [inputChat, setInputChat] = useState("");
   const { id } = useParams();
-  const { data } = useSelector((state) => state.chat);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [message, setMessage] = useState("");
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  // Get the current chat from the Redux store
+  const { data: chats, loading } = useSelector((state) => state.chat);
+  const currentChat = chats.find(chat => chat.id === id);
 
   useEffect(() => {
-    if (data.length > 0) {
-      const chat = data.find((chat) => chat.id === id);
-      if (chat) {
-        setDataDetail(chat);
-        setMessageDetail(chat.messages)
-      }
+    if (id && !currentChat) {
+      // Redirect to home if chat doesn't exist
+      navigate("/");
     }
-  }, [data, id]);
+  }, [id, currentChat, navigate]);
 
-  const handleChatDetail = async () => {
-    if (id) {
-      const chatText = await Gemini(inputChat, messageDetail);
-      if(dataDetail.title === 'Chat'){
-        const promptName = `This is a new chat, and user ask about ${inputChat}. No rely and comment just give me a name for this chat, Max length is 10 characters`;
-        const newTitle = await Gemini(promptName)
-        dispatch(setNameChat({newTitle, chatId: id}))
-      }
-      if (chatText) {
-        const dataMessage = {
-          idChat: id,
-          userMess: inputChat,
-          botMess: chatText,
-        };
+  useEffect(() => {
+    scrollToBottom();
+  }, [currentChat?.messages]);
 
-        dispatch(addMessage(dataMessage));
-        setInputChat("");
-      }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+    
+    dispatch(addMessage({ 
+      idChat: id, 
+      userMess: message, 
+      botMess: "Processing your request..." 
+    }));
+    
+    setMessage("");
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "48px";
     }
   };
 
-  return (
-    <div className="text-white xl:w-[80%] w-full relative">
-      <div className="flex items-center space-x-2 p-4">
-        <button onClick={() => setMenuToggle(!menuToggle)}>
-          <img src={IconMenu} alt="menu icon" className="w-8 h-8 xl:hidden" />
-        </button>
-        <h1 className="text-xl uppercase font-bold ">Gemini</h1>
+  const handleTextareaChange = (e) => {
+    setMessage(e.target.value);
+    
+    // Auto-resize textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "48px";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  // Show welcome screen if no chat is selected
+  if (!currentChat) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center max-w-md">
+          <div className="mb-6">
+            <img src={BotAvatar} alt="Bot" className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+            Welcome to My ChatGPT
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Start a new conversation or select an existing chat to begin.
+          </p>
+        </div>
       </div>
-      {menuToggle && (
-        <div className="absolute h-full top-0 left-0 xl:hidden">
-          <SideBar onToggle={() => setMenuToggle(!menuToggle)} />
-        </div>
-      )}
-      <div className="max-w-[90%] w-full mx-auto mt-20 space-y-10">
-        {id ? (
-          <div className="flex flex-col space-y-4 p-4 h-[400px] overflow-x-hidden overflow-y-auto">
-            {Array.isArray(messageDetail) &&
-              messageDetail.map((item) => (
-                <div className="flex space-y-6 flex-col" key={item.id}>
-                  <div className="flex space-x-6 items-baseline">
-                    {item.isBot ? (
-                      <>
-                        <img src={IconStar} alt="star" className="w-8 h-8" />
-                        <p dangerouslySetInnerHTML={{ __html: item.text }} />
-                      </>
-                    ) : (
-                      <>
-                        <p>User</p>
-                        <p>{item.text}</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <div className="flex flex-col space-y-5">
-            <div className="space-y-1">
-              <h2 className="bg-gradient-to-r from-blue-600 via-green-500 to-indigo-400 text-[30px] inline-block text-transparent bg-clip-text font-bold ">
-                Xin Chào
-              </h2>
-              <p className="text-3xl">Hôm nay tôi có thể giúp gì cho bạn</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-[200px] h-[200px] bg-primaryBg-sideBar flex items-center justify-center rounded-lg">
-                <p>Lên kế hoạch bữa ăn</p>
-              </div>
-              <div className="w-[200px] h-[200px] bg-primaryBg-sideBar flex items-center justify-center rounded-lg">
-                <p>Cụm từ ngôn ngữ mới</p>
-              </div>
-              <div className="w-[200px] h-[200px] bg-primaryBg-sideBar flex items-center justify-center rounded-lg">
-                <p>Bí quyết viết thư xin việc</p>
-              </div>
-              <div className="w-[200px] h-[200px] bg-primaryBg-sideBar flex items-center justify-center rounded-lg flex-col">
-                <p>Tạo hình ảnh với AI</p>
-                <img src={ImgTemp} alt="temp" className="w-[150px] h-[150px]" />
-              </div>
-            </div>
-          </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+      {/* Chat header */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center">
+        <h1 className="text-lg font-medium text-gray-800 dark:text-white truncate">
+          {currentChat.title || "New Chat"}
+        </h1>
+        {loading && (
+          <span className="ml-2 inline-block w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
         )}
-        <div className="flex items-center space-x-4 w-full">
-          <input
-            type="text"
-            value={inputChat}
-            placeholder="Nhập câu lệnh tại đây"
-            className="p-4 rounded-lg bg-primaryBg-default w-[90%] border"
-            onChange={(e) => setInputChat(e.target.value)}
-          />
-          <button
-            className="p-4 rounded-lg bg-green-500 text-white"
-            onClick={handleChatDetail}
+      </div>
+
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+        {currentChat.messages && currentChat.messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.isBot ? 'justify-start' : 'justify-end'} message-animation`}>
+            <div className={`flex max-w-[80%] ${msg.isBot ? 'flex-row' : 'flex-row-reverse'} items-end`}>
+              <div className="flex-shrink-0 h-8 w-8 rounded-full overflow-hidden mb-1 mx-2">
+                <img 
+                  src={msg.isBot ? BotAvatar : UserAvatar} 
+                  alt={msg.isBot ? "Bot" : "User"} 
+                  className="h-full w-full object-cover" 
+                />
+              </div>
+              <div 
+                className={`rounded-2xl px-4 py-3 ${
+                  msg.isBot 
+                    ? 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-none shadow-sm' 
+                    : 'bg-indigo-600 text-white rounded-br-none shadow-sm'
+                }`}
+              >
+                {msg.isBot ? (
+                  <div 
+                    className="prose dark:prose-invert prose-sm prose-p:my-1 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-700 prose-pre:p-2 prose-pre:rounded prose-code:text-sm"
+                    dangerouslySetInnerHTML={{ 
+                      __html: DOMPurify.sanitize(marked(msg.text)) 
+                    }}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef}></div>
+      </div>
+
+      {/* Message input */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-white py-3 px-4 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[48px] max-h-[200px]"
+              rows="1"
+              disabled={loading}
+            ></textarea>
+          </div>
+          <button 
+            type="submit" 
+            disabled={!message.trim() || loading} 
+            className={`p-3 rounded-full transition-colors duration-200 ${
+              message.trim() && !loading
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+            }`}
           >
-            Gửi
+            <PaperAirplaneIcon className="w-5 h-5" />
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
